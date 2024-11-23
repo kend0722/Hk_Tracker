@@ -42,6 +42,7 @@ class Predictor(object):
         self.test_size = exp.test_size
         self.device = device
         self.fp16 = fp16
+
         # 处理TensorRT模型
         if trt_file is not None: # 如果提供了TensorRT模型文件路径。
             from torch2trt import TRTModule
