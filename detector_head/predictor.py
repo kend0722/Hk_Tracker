@@ -7,6 +7,7 @@
 @Description: predictor - 算法检测头，帧图像->图像结果
 @Modify:
 @Contact: tankang0722@gmail.com
+
 """
 import torch
 import cv2
@@ -17,13 +18,14 @@ from utils.post_process.post_processing import postprocess
 """
 作用：
     初始化模型和其他必要的属性。
-    处理TensorRT模型（可选）。
+    处理TensorRT模型（可选）。如果是边缘设备建议使用onnx或者openvino。
     设置图像预处理参数。
     提供 inference 方法，用于图像预处理、模型推理和后处理。
     返回推理结果和图像信息。
 """
+
 class Predictor(object):
-    """这是一个用于预测的类，主要负责图像预处理、模型推理和后处理。"""
+    """这是一个用于预测被检测物体的类，主要负责图像预处理、模型推理和后处理。"""
     # 初始化属性,trt_file,TensorRT模型文件路径，默认为 None。decoder: 解码函数，默认为 None。
     def __init__(
         self,
@@ -31,7 +33,7 @@ class Predictor(object):
         exp,
         trt_file=None,
         decoder=None,
-        device=torch.device("cpu"),
+        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
         fp16=False
     ):
         self.model = model
@@ -44,22 +46,22 @@ class Predictor(object):
         self.fp16 = fp16
 
         # 处理TensorRT模型
-        if trt_file is not None: # 如果提供了TensorRT模型文件路径。
+        if trt_file is not None:  # 如果提供了TensorRT模型文件路径。
             from torch2trt import TRTModule
             # 创建TensorRT模块对象。
             model_trt = TRTModule()
             # 加载TensorRT模型的状态字典。
             model_trt.load_state_dict(torch.load(trt_file))
-            # 创建一个全1的张量，用于模型推理。
+            # 创建一个全1的张量，进行一次前向推理，确保模型准备好。
             x = torch.ones((1, 3, exp.test_size[0], exp.test_size[1]), device=device)
-            self.model(x)   # 进行一次前向推理，确保模型准备好。
+            self.model(x)
             self.model = model_trt  # 将模型替换为TensorRT模型。
-        # 设置图像预处理参数
+        # 设置图像预处理参数，当然这里知识为了保证视频帧的所有图像色彩一致性
         self.rgb_means = (0.485, 0.456, 0.406)  # 设置RGB通道的均值。
         self.std = (0.229, 0.224, 0.225)    # 设置RGB通道的标准差。
 
 
-    """推理方法 inference"""
+    """ 推理方法 inference """
     def inference(self, img, timer):
         img_info = {"id": 0}    # 初始化图像信息字典。
         # 处理图像路径
