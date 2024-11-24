@@ -14,10 +14,9 @@ import numpy as np
 import scipy
 import lap
 from scipy.spatial.distance import cdist
-
 from cython_bbox import bbox_overlaps as bbox_ious
-from yolox.tracker import kalman_filter
-import time
+from tracking.tracker import kalman_filter
+
 
 def merge_matches(m1, m2, shape):
     O,P,Q = shape
@@ -80,13 +79,18 @@ def ious(atlbrs, btlbrs):
 
     return ious
 
-
+"""
+iou_distance 函数用于计算两个轨迹列表之间的成本矩阵，成本矩阵的每个元素表示两个轨迹之间的 IoU 距离。具体来说，IoU 距离定义为：
+IoU Distance(A,B)=1−IoU(A,B)
+IoU 距离：通过 1 - IoU 计算，将 IoU 值转换为距离值。这样做是为了适应多目标跟踪中常用的最小化成本矩阵的匹配算法（如匈牙利算法）。
+主要用于多目标跟踪中的轨迹关联，帮助算法决定哪些检测结果应该关联到现有的轨迹上。
+"""
 def iou_distance(atracks, btracks):
     """
     Compute cost based on IoU
     :type atracks: list[STrack]
     :type btracks: list[STrack]
-
+    TODO 需要进一步理解
     :rtype cost_matrix np.ndarray
     """
 

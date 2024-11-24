@@ -8,8 +8,10 @@
 @Modify:
 @Contact: tankang0722@gmail.com
 """
+
+
 import numpy as np
-from tracker.base_track import BaseTrack, TrackState
+from tracking.tracker.base_track import BaseTrack, TrackState
 from tracking.tracker import matching
 from tracking.tracker.kalman_filter import KalmanFilter
 
@@ -25,16 +27,16 @@ class BYTETracker(object):
 
         self.frame_id = 0   # frame_id: 当前处理的帧ID。
         self.args = args    # 跟踪参数，通常是一个包含各种配置的命名空间对象。
-        #self.det_thresh = args.track_thresh
+        # self.det_thresh = args.track_thresh
         self.det_thresh = args.track_thresh + 0.1  # 检测阈值，用于过滤检测结果。
-        self.buffer_size = int(frame_rate / 30.0 * args.track_buffer)   # 缓冲区大小，用于存储跟踪对象的帧数。根据帧率和跟踪缓冲参数计算。
+        self.buffer_size = int(frame_rate / 30.0 * args.track_buffer)  # 缓冲区大小，用于存储跟踪对象的帧数。根据帧率和跟踪缓冲参数计算。
         self.max_time_lost = self.buffer_size  # 最大丢失时间，超过这个时间的跟踪对象将被移除。
         self.kalman_filter = KalmanFilter()   # 卡尔曼滤波器，用于预测跟踪对象的下一帧位置。
 
     # 更新跟踪结果
     def update(self, output_results, img_info, img_size):
-        """"""
-        # 更新帧ID:
+        """接受检测头传递的结果数据"""
+        # 每次传入新的结果都需要更新帧ID:
         self.frame_id += 1
 
         # 初始化当前帧的跟踪状态:
@@ -43,15 +45,15 @@ class BYTETracker(object):
         lost_stracks = []       # 存储当前帧中丢失的跟踪对象。
         removed_stracks = []    # 存储当前帧中移除的跟踪对象。
 
-        # 处理检测结果:
+        """step1: 处理检测结果 """
         # 检查检测结果的形状，如果是5列（即包含4个边界框坐标和1个置信度分数），直接提取分数和边界框。
-        if output_results.shape[1] == 5:
-            scores = output_results[:, 4]
-            bboxes = output_results[:, :4]
+        if output_results.shape[1] == 5:    # outputs, num_classes, confthre, nmsthre
+            scores = output_results[:, 4]   # confthre
+            bboxes = output_results[:, :4]  # outputs x1y1x2y2
         else:
-        # 如果检测结果的形状不是5列，假设是Tensor，先转换为NumPy数组，然后提取分数和边界框。
+            # 如果检测结果的形状不是5列，假设是Tensor，先转换为NumPy数组，然后提取分数和边界框。
             output_results = output_results.cpu().numpy()
-            scores = output_results[:, 4] * output_results[:, 5]
+            scores = output_results[:, 4] * output_results[:, 5]  # confthre * nmsthre
             bboxes = output_results[:, :4]  # x1y1x2y2
 
         # 将边界框坐标从归一化坐标转换为实际图像坐标:
@@ -59,23 +61,23 @@ class BYTETracker(object):
         scale = min(img_size[0] / float(img_h), img_size[1] / float(img_w))
         bboxes /= scale  # 将检测框从缩放后的图像坐标转换回原始图像坐标。
 
-        # 过滤检测结果
+
+        """过滤检测结果"""
         #  获取得分高于 track_thresh 的索引。
         remain_inds = scores > self.args.track_thresh
-        inds_low = scores > 0.1 # : 获取得分大于0.1的索引。
+        inds_low = scores > 0.1  # : 获取得分大于0.1的索引。
         inds_high = scores < self.args.track_thresh  # : 获取得分小于 track_thresh 的索引。
         # 获取得分在0.1到 track_thresh 之间的索引。
-        inds_second = np.logical_and(inds_low, inds_high)   # 提取得分在0.1到 track_thresh 之间的检测框。
+        inds_second = np.logical_and(inds_low, inds_high)
         dets_second = bboxes[inds_second]   # : 提取得分在0.1到 track_thresh 之间的检测框。
-        dets = bboxes[remain_inds]  # : 提取得分高于 track_thresh 的检测框。
+        dets = bboxes[remain_inds]   # 提取得分高于 track_thresh 的检测框。
         scores_keep = scores[remain_inds]   # : 提取得分高于 track_thresh 的检测框的置信度分数。
-        scores_second = scores[inds_second] # : 提取得分在0.1到 track_thresh 之间的检测框的置信度分数。
+        scores_second = scores[inds_second]  # : 提取得分在0.1到 track_thresh 之间的检测框的置信度分数。
 
-        # 如果有检测框，则创建跟踪对象:
-        if len(dets) > 0: # 有得分高于 track_thresh 的检测框。
+        # # 有得分高于 track_thresh 的检测框。
+        if len(dets) > 0:
             '''将检测框和得分转换为 STrack 对象。'''
-            detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for
-                          (tlbr, s) in zip(dets, scores_keep)]
+            detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for (tlbr, s) in zip(dets, scores_keep)]
         else:
             # 有得分高于 track_thresh 的检测框，detections 列表为空。
             detections = []
@@ -204,97 +206,140 @@ class BYTETracker(object):
 
 
 
+""" STrack对象 是一个用于目标跟踪的类，主要使用卡尔曼滤波器来估计目标的状态 """
 class STrack(BaseTrack):
-    shared_kalman = KalmanFilter()
+    # shared_kalman 是一个静态属性，表示所有 STrack 实例共享同一个卡尔曼滤波器实例。
+    shared_kalman = KalmanFilter()  # 卡尔曼滤波器用于估计目标的状态，从而提高跟踪的准确性。
+
     def __init__(self, tlwh, score):
+        """
+        Args:
+            tlwh: 目标的初始边界框，格式为 (top left x, top left y, width, height)。
+            score 是目标的置信度分数。
+        function: STrack 类主要用于管理目标跟踪中的轨迹信息，包括轨迹的初始化、预测、更新和重新激活等功能。
+        """
+        # 等待被激活
+        self._tlwh = np.asarray(tlwh, dtype=np.float)   # 存储初始的边界框信息。
+        self.kalman_filter = None   # 用于存储卡尔曼滤波器实例
+        self.mean, self.covariance = None, None    # 分别存储卡尔曼滤波器的状态均值和协方差矩阵，初始为 None
+        self.is_activated = False   # 表示该轨迹是否已激活，初始为 False
+        self.score = score  # 存储目标的置信度分数
+        self.tracklet_len = 0   # 记录轨迹的长度，初始为 0
 
-        # wait activate
-        self._tlwh = np.asarray(tlwh, dtype=np.float)
-        self.kalman_filter = None
-        self.mean, self.covariance = None, None
-        self.is_activated = False
-
-        self.score = score
-        self.tracklet_len = 0
-
+    # 预测下一个时间的目标
     def predict(self):
-        mean_state = self.mean.copy()
+        mean_state = self.mean.copy()   # mean_state 当前状态的副本
+        # 如果当前轨迹状态不是 Tracked，则将 mean_state 的第8个元素（通常表示速度）设为 0
         if self.state != TrackState.Tracked:
             mean_state[7] = 0
+        # 使用卡尔曼滤波器的 predict 方法更新 self.mean 和 self.covariance
         self.mean, self.covariance = self.kalman_filter.predict(mean_state, self.covariance)
 
+    # 多轨迹预测方法
     @staticmethod
     def multi_predict(stracks):
-        if len(stracks) > 0:
+        # 批量预测多个轨迹的状态
+        if len(stracks) > 0:    # 包含多个 STrack 实例的列表
+            # multi_mean 和 multi_covariance 分别存储所有轨迹的状态均值和协方差矩阵
             multi_mean = np.asarray([st.mean.copy() for st in stracks])
             multi_covariance = np.asarray([st.covariance for st in stracks])
+            # 如果某个轨迹的状态不是 Tracked，则将 multi_mean 的第8个元素设为 0
             for i, st in enumerate(stracks):
                 if st.state != TrackState.Tracked:
                     multi_mean[i][7] = 0
+            # 使用共享的卡尔曼滤波器的 multi_predict 方法批量预测所有轨迹的状态
             multi_mean, multi_covariance = STrack.shared_kalman.multi_predict(multi_mean, multi_covariance)
+            # 更新每个轨迹的 mean 和 covariance
             for i, (mean, cov) in enumerate(zip(multi_mean, multi_covariance)):
                 stracks[i].mean = mean
                 stracks[i].covariance = cov
 
+    # 用来激活一个新的轨迹
     def activate(self, kalman_filter, frame_id):
-        """Start a new tracklet"""
-        self.kalman_filter = kalman_filter
+        """ 开始一个新的轨迹 """
+        self.kalman_filter = kalman_filter # 卡尔曼滤波器实例
+        # 获取一个新的轨迹ID
         self.track_id = self.next_id()
+        # 卡尔曼滤波器的 initiate 方法初始化轨迹的状态均值和协方差矩阵
         self.mean, self.covariance = self.kalman_filter.initiate(self.tlwh_to_xyah(self._tlwh))
-
+        # 重置轨迹长度 tracklet_len 为 0。
         self.tracklet_len = 0
+        # 设置轨迹状态为 Tracked。
         self.state = TrackState.Tracked
+        # 如果当前帧编号为 1，则设置 is_activated 为 True。
         if frame_id == 1:
             self.is_activated = True
         # self.is_activated = True
+        # # 设置当前帧编号 frame_id 和轨迹起始帧编号 start_frame。
         self.frame_id = frame_id
         self.start_frame = frame_id
 
+    """ 重新激活一个已经存在的轨迹 """
     def re_activate(self, new_track, frame_id, new_id=False):
-        self.mean, self.covariance = self.kalman_filter.update(
-            self.mean, self.covariance, self.tlwh_to_xyah(new_track.tlwh)
-        )
+        """
+        Args:
+            new_track:  new_track 是一个新的 STrack 实例，包含更新后的信息
+            frame_id: 当前帧的编号。
+            new_id: new_id 是一个布尔值，表示是否为轨迹分配一个新的ID。
+        Returns:
+        """
+        # 使用卡尔曼滤波器的 update 方法更新轨迹的状态均值和协方差矩阵
+        self.mean, self.covariance = self.kalman_filter.update(self.mean, self.covariance,
+                                                               self.tlwh_to_xyah(new_track.tlwh))
+        # 重置轨迹长度 tracklet_len 为 0
         self.tracklet_len = 0
+        # 设置轨迹状态为 Tracked。
         self.state = TrackState.Tracked
         self.is_activated = True
+        # 设置当前帧编号 frame_id。
         self.frame_id = frame_id
+        # # 如果 new_id 为 True，则使用 next_id 方法获取一个新的轨迹ID。
         if new_id:
             self.track_id = self.next_id()
+        # # 更新轨迹的置信度分数 score。
         self.score = new_track.score
 
+    # 更新一个匹配的轨迹
     def update(self, new_track, frame_id):
         """
-        Update a matched track
-        :type new_track: STrack
-        :type frame_id: int
-        :type update_feature: bool
+        Args:
+            new_track 是一个新的 STrack 实例，包含更新后的信息。
+            frame_id: int 当前帧编号
         :return:
         """
+        # 设置当前帧编号 frame_id
         self.frame_id = frame_id
+        # 增加轨迹长度 tracklet_len
         self.tracklet_len += 1
-
+        # 获取新的边界框信息 new_tlwh
         new_tlwh = new_track.tlwh
-        self.mean, self.covariance = self.kalman_filter.update(
-            self.mean, self.covariance, self.tlwh_to_xyah(new_tlwh))
+        # 使用卡尔曼滤波器的 update 方法更新轨迹的状态均值和协方差矩阵
+        self.mean, self.covariance = self.kalman_filter.update(self.mean, self.covariance, self.tlwh_to_xyah(new_tlwh))
+        # 设置轨迹状态为 Tracked
         self.state = TrackState.Tracked
+        # 设置 is_activated 为 True
         self.is_activated = True
-
+        # 更新轨迹的置信度分数 score
         self.score = new_track.score
 
+
     @property
-    # @jit(nopython=True)
+    # 获取当前轨迹的边界框信息  # @property装饰器 -> 方法属性
     def tlwh(self):
-        """Get current position in bounding box format `(top left x, top left y,
-                width, height)`.
-        """
+        # 如果 self.mean 为 None，则返回初始的边界框信息 _tlwh。
         if self.mean is None:
             return self._tlwh.copy()
+        # 否则，从卡尔曼滤波器的状态均值中提取边界框信息。
         ret = self.mean[:4].copy()
+        # 将状态均值中的 (center_x, center_y, aspect_ratio, height) 转换为 (top_left_x, top_left_y, width, height) 格式。
         ret[2] *= ret[3]
         ret[:2] -= ret[2:] / 2
+        # 返回转换后的边界框信息。
         return ret
 
 
+
+""" 将两个轨迹列表 tlista 和 tlistb 合并成一个新的列表，确保每个轨迹只出现一次。"""
 def joint_stracks(tlista, tlistb):
     exists = {}
     res = []
@@ -308,6 +353,7 @@ def joint_stracks(tlista, tlistb):
             res.append(t)
     return res
 
+"""从轨迹列表 tlista 中移除出现在轨迹列表 tlistb 中的所有轨迹。"""
 def sub_stracks(tlista, tlistb):
     stracks = {}
     for t in tlista:
@@ -319,7 +365,9 @@ def sub_stracks(tlista, tlistb):
     return list(stracks.values())
 
 
+"""去除两个轨迹列表 stracksa 和 stracksb 中的重复轨迹。重复轨迹的判断依据是 IoU（Intersection over Union）距离小于 0.15。"""
 def remove_duplicate_stracks(stracksa, stracksb):
+    # IoU 距离：用于多目标跟踪中的轨迹匹配，衡量两个轨迹之间的相似度。成本矩阵中的值越小，表示两个轨迹越相似。
     pdist = matching.iou_distance(stracksa, stracksb)
     pairs = np.where(pdist < 0.15)
     dupa, dupb = list(), list()

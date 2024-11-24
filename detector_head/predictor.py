@@ -13,8 +13,9 @@ import torch
 import cv2
 import numpy as np
 import os.path as osp
-from data.dataset.preprocess import preproc
+from data.dataset.preprocess import preprocess_image
 from utils.post_process.post_processing import postprocess
+
 """
 作用：
     初始化模型和其他必要的属性。
@@ -63,6 +64,9 @@ class Predictor(object):
 
     """ 推理方法 inference """
     def inference(self, img, timer):
+
+        """ 步骤1 给每帧图像顺序处理记录id """
+        # 初始化图像信息字典。
         img_info = {"id": 0}    # 初始化图像信息字典。
         # 处理图像路径
         if isinstance(img, str):
@@ -77,11 +81,15 @@ class Predictor(object):
         img_info["height"] = height
         img_info["width"] = width
         img_info["raw_img"] = img
-        # 图像预处理
-        img, ratio = preproc(img, self.test_size, self.rgb_means, self.std) # 对图像进行预处理，包括缩放、归一化等。
+
+        """ 图像预处理 """
+        img, ratio = preprocess_image(img, self.test_size, self.rgb_means, self.std)  # 对图像进行预处理，包括缩放、归一化等。
         img_info["ratio"] = ratio   # 存储缩放比例。
-        img = torch.from_numpy(img).unsqueeze(0).float().to(self.device)    # 将图像转换为张量，并添加批次维度，转换为浮点数，移动到指定设备。
-        # 如果启用了半精度推理，将图像转换为半精度浮点数。
+        # 将图像转换为张量，并添加批次维度
+        img = torch.from_numpy(img).unsqueeze(0).float().to(self.device)
+
+        """ 步骤2: 前向传播 推理 *note: 可以在这里替换为你的目标检测的转换头 """
+        # 如果启用了半精度推理，将图像转换为半精度浮点数。需要与模型的精度保持一致
         if self.fp16:
             img = img.half()  # to FP16
         # 模型推理，前向传播
@@ -94,5 +102,14 @@ class Predictor(object):
             outputs = postprocess(
                 outputs, self.num_classes, self.confthre, self.nmsthre
             )
-            #logger.info("Infer time: {:.4f}s".format(time.time() - t0))    # 打印推理时间（注释掉了）。
-        return outputs, img_info    # 返回推理结果和图像信息。
+            # print(timer.toc(average=False), 'inference')
+        """
+           outputs:list()
+                   output = [
+                        detections_image_N -> torch.tensor([
+                        [10.0, 20.0, 50.0, 60.0, 0.9, 0.8, 1.0],  # 第n个图像的第一个检测框
+                        ...
+                    ]   
+           img_info    # 返回推理结果和图像信息。 out
+        """
+        return outputs, img_info    # 返回推理结果和图像信息。支持多张的图像
