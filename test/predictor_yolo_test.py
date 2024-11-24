@@ -13,32 +13,31 @@ import os
 import sys
 import cv2
 from detector_head.yolov5_predictor import Yolov5Predictor
+from track_utils.my_timer import MyTimer
 import importlib.util
 
 
-# 添加模块所在目录到 sys.path
-sys.path.append(os.path.abspath('/'))
-# 打印 sys.path 来验证是否添加成功
-# print("Updated sys.path:", sys.path)
-
-# 检查 utils 目录和 timer.py 文件是否存在
-utils_path = os.path.join('/', 'utils')
-timer_path = os.path.join(utils_path, 'my_timer.py')
-
-# print("Utils directory exists:", os.path.exists(utils_path))
-# print("Timer file exists:", os.path.exists(timer_path))
-
-# 尝试动态导入模块
-try:
-    spec = importlib.util.spec_from_file_location("my_timer", timer_path)
-    timer_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(timer_module)
-    MyTimer = timer_module.MyTimer
-    print("Imported Timer successfully")
-except ModuleNotFoundError as e:
-    print(f"Module not found: {e}")
-except Exception as e:
-    print(f"Other error: {e}")
+# # 添加模块所在目录到 sys.path
+# sys.path.append(os.path.abspath('/'))
+# # 打印 sys.path 来验证是否添加成功
+#
+#
+# # 检查 utils 目录和 timer.py 文件是否存在
+# utils_path = os.path.join('/', 'utils')
+# timer_path = os.path.join(utils_path, 'my_timer.py')
+#
+#
+# # 尝试动态导入模块
+# try:
+#     spec = importlib.util.spec_from_file_location("my_timer", timer_path)
+#     timer_module = importlib.util.module_from_spec(spec)
+#     spec.loader.exec_module(timer_module)
+#     MyTimer = timer_module.MyTimer
+#     print("Imported Timer successfully")
+# except ModuleNotFoundError as e:
+#     print(f"Module not found: {e}")
+# except Exception as e:
+#     print(f"Other error: {e}")
 
 
 if __name__ == '__main__':

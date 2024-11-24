@@ -13,9 +13,11 @@ import os.path as osp
 import cv2
 import time
 import os
+
+import torch
 from loguru import logger
 from tracking.byte_tracker import BYTETracker
-from utils.my_timer import MyTimer
+from track_utils.my_timer import MyTimer
 from visualization.visualize import plot_tracking
 from detector_head.predictor_yolov5 import Yolov5nPredictor
 
@@ -224,6 +226,9 @@ def video2images(video_path, output_folder, image_format='jpg'):
     print(f"转换完成，共生成 {frame_count} 张图像。")
 
 
+
+
+
 # 示例用法
 if __name__ == "__main__":
     # video_path = r"D:\kend\WorkProject\Hk_Tracker\data\videos\palace.mp4"
@@ -231,9 +236,12 @@ if __name__ == "__main__":
     # video2images(video_path, output_folder)
     model_path = r'D:\kend\other\yolov5n.pt'
     predictor = Yolov5nPredictor(model_path=model_path)
-    img = cv2.imread(r"D:\kend\WorkProject\Hk_Tracker\data\dataset\test_images\frame_0000.jpg")
-    re, img_info = predictor.predict(img)
-    print(re, "\n")
-    img_info["raw_img"] = None
-    print(img_info)
-    # imageflow_demo()
+    # img = cv2.imread(r"D:\kend\WorkProject\Hk_Tracker\data\dataset\test_images\frame_0000.jpg")
+    # re, img_info = predictor.predict(img)
+    # print(re, "\n")
+    # img_info["raw_img"] = None
+    # print(img_info)
+    vis_folder = r"D:\kend\WorkProject\Hk_Tracker\visualization\vis_folder"
+    current_time = time.localtime()
+    print(current_time)
+    imageflow_demo(predictor, vis_folder, current_time)
