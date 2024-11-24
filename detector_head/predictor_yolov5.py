@@ -13,7 +13,7 @@ from detector_head.yolov5.yolov_func import non_max_suppression, scale_boxes
 from detector_head.yolov5.yolov_model import DetectMultiBackend
 
 
-class Yolov5Predictor:
+class Yolov5nPredictor:
     def __init__(self, model_path):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.weights_path = model_path
@@ -48,24 +48,33 @@ class Yolov5Predictor:
         padded_image[y_offset:y_offset + new_height, x_offset:x_offset +
                                                               new_width] = resized_image
 
-        return padded_image
+        return padded_image, scale
 
 
     def predict(self, image):
-        # 校验图像的格式
+        """ 步骤1 给每帧图像顺序处理记录id """
+        # 初始化图像信息字典。
+        img_info = {"id": 0}  # 初始化图像信息字典。
+        # 处理图像路径
         if isinstance(image, str):
+            import os.path as osp
+            img_info["file_name"] = osp.basename(image)  # 获取图像文件名。
             image = cv2.imread(image)
-        elif isinstance(image, np.ndarray):
-            image = image
         else:
-            return []
-        img = self.resize_and_padding(image, target_width=640, target_height=640)
+            #  如果输入不是一个字符串。
+            img_info["file_name"] = None  # 文件名设为 None。
+
+        # 获取图像尺寸
+        height, width = image.shape[:2]
+        img_info["height"] = height
+        img_info["width"] = width
+        img_info["raw_img"] = image
+        img, scale = self.resize_and_padding(image, target_width=640, target_height=640)
+        img_info["ratio"] = scale  # 存储缩放比例。
         im = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         im = np.ascontiguousarray(im)  # 转换为连续的数组
         im = torch.from_numpy(im).to(self.device)
-        # im = torch.tensor(im, dtype=torch.float16).to(device)
         im = im.float()  # uint8 to fp16/32
-        # im = im.to(torch.float16)  # uint8 to int8
         im /= 255  # 0 - 255 to 0.0 - 1.0
         if len(im.shape) == 3:
             im = im[None]  # 增加bath size维度
@@ -89,6 +98,17 @@ class Yolov5Predictor:
         for *xyxy, conf, _cls in person_pre[0]:  # 遍历检测到的人
             # 位置+类别
             person_result.append([
-                int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3]), _cls.item()]
+                int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3]), _cls.item(), conf.item(), 0.45]
                 )
-        return person_result
+        return person_result, img_info
+
+
+
+if __name__ == '__main__':
+    model_path = r'D:\kend\other\yolov5n.pt'
+    predictor = Yolov5nPredictor(model_path=model_path)
+    img = cv2.imread(r"D:\kend\WorkProject\Hk_Tracker\data\dataset\test_images\frame_0000.jpg")
+    re, img_info = predictor.predict(img)
+    print(re, "\n")
+    img_info["raw_img"] = None
+    print(img_info)

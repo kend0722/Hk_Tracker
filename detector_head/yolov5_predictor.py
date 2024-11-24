@@ -92,3 +92,11 @@ class Yolov5Predictor:
                 int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3]), _cls.item()]
                 )
         return person_result
+
+
+if __name__ == '__main__':
+    model_path = r'D:\kend\other\yolov5n.pt'
+    predictor = Yolov5Predictor(model_path=model_path)
+    img = cv2.imread(r"D:\kend\WorkProject\Hk_Tracker\data\dataset\test_images\frame_0000.jpg")
+    re = predictor.predict(img)
+    print(re)

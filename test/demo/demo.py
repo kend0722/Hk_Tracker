@@ -17,6 +17,7 @@ from loguru import logger
 from tracking.byte_tracker import BYTETracker
 from utils.my_timer import MyTimer
 from visualization.visualize import plot_tracking
+from detector_head.predictor_yolov5 import Yolov5nPredictor
 
 
 # 检测图像的类型
@@ -228,5 +229,11 @@ if __name__ == "__main__":
     # video_path = r"D:\kend\WorkProject\Hk_Tracker\data\videos\palace.mp4"
     # output_folder = r"D:\kend\WorkProject\Hk_Tracker\data\dataset\test_images"
     # video2images(video_path, output_folder)
-    predictor =
-    imageflow_demo()
+    model_path = r'D:\kend\other\yolov5n.pt'
+    predictor = Yolov5nPredictor(model_path=model_path)
+    img = cv2.imread(r"D:\kend\WorkProject\Hk_Tracker\data\dataset\test_images\frame_0000.jpg")
+    re, img_info = predictor.predict(img)
+    print(re, "\n")
+    img_info["raw_img"] = None
+    print(img_info)
+    # imageflow_demo()
